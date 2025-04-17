@@ -6,159 +6,10 @@ namespace eecs471 {
 #define TILE_WIDTH_A 18
 #define TILE_WIDTH_B 32
 #define MAX_K 7
-#define BLOCK_DEPTH 1024 / (TILE_WIDTH * TILE_WIDTH)
-#define BLOCK_SIZE TILE_WIDTH * TILE_WIDTH
-#define B_TILE 500
 
-// Original Version
-// __global__ void forward_kernel(float *y, const float *x, const float *k, const int B, const int M, const int C, const int H, const int W, const int K)
-// {
+__constant__ float const_kernel[24*12*MAX_K*MAX_K];
 
-//     /*
-//     Modify this function to implement the forward pass described in Chapter 16.
-//     We have added an additional dimension to the tensors to support an entire mini-batch
-//     The goal here is to be correct AND fast.
-//     We have some nice #defs for you below to simplify indexing. Feel free to use them, or create your own.
-//     */
-
-//     const int H_out = H - K + 1;
-//     const int W_out = W - K + 1;
-
-// // An example use of these macros:
-// // float a = y4d(0,0,0,0)
-// // y4d(0,0,0,0) = a
-// #define y4d(i3, i2, i1, i0) y[(i3) * (M * H_out * W_out) + (i2) * (H_out * W_out) + (i1) * (W_out) + i0]
-// #define x4d(i3, i2, i1, i0) x[(i3) * (C * H * W) + (i2) * (H * W) + (i1) * (W) + i0]
-// #define k4d(i3, i2, i1, i0) k[(i3) * (C * K * K) + (i2) * (K * K) + (i1) * (K) + i0]
-
-//     int b = blockDim.x * blockIdx.x + threadIdx.x;
-
-//     if (b < B) // for each image in the batch
-//     {
-//         /*Original Version*/
-
-//         for (int m = 0; m < M; m++)         // for each output feature maps
-//             for (int h = 0; h < H_out; h++) // for each output element
-//                 for (int w = 0; w < W_out; w++)
-//                 {
-//                     y4d(b, m, h, w) = 0;
-//                     for (int c = 0; c < C; c++)     // sum over all input feature maps
-//                         for (int p = 0; p < K; p++) // KxK filter
-//                             for (int q = 0; q < K; q++)
-//                                 y4d(b, m, h, w) += x4d(b, c, h + p, w + q) * k4d(m, c, p, q);
-//                 }
-
-//     }
-
-// #undef y4d
-// #undef x4d
-// #undef k4d
-// }
-
-
-/*Working Version*/
-// __global__ void forward_kernel(float *y, const float *x, const float *k, const int B, const int M, const int C, const int H, const int W, const int K)
-// {
-
-//     /*
-//     Modify this function to implement the forward pass described in Chapter 16.
-//     We have added an additional dimension to the tensors to support an entire mini-batch
-//     The goal here is to be correct AND fast.
-//     We have some nice #defs for you below to simplify indexing. Feel free to use them, or create your own.
-//     */
-
-//     const int H_out = H - K + 1;
-//     const int W_out = W - K + 1;
-
-// // An example use of these macros:
-// // float a = y4d(0,0,0,0)
-// // y4d(0,0,0,0) = a
-// #define y4d(i3, i2, i1, i0) y[(i3) * (M * H_out * W_out) + (i2) * (H_out * W_out) + (i1) * (W_out) + i0]
-// #define x4d(i3, i2, i1, i0) x[(i3) * (C * H * W) + (i2) * (H * W) + (i1) * (W) + i0]
-// #define k4d(i3, i2, i1, i0) k[(i3) * (C * K * K) + (i2) * (K * K) + (i1) * (K) + i0]
-
-//     int W_grid = (W_out + TILE_WIDTH - 1) / TILE_WIDTH;        //number of horizontal tiles per output map
-
-//     /*Self-defined Parameters*/
-//     int m = blockIdx.x;                 // for each output feature maps
-//     int h = (blockIdx.y / W_grid) * TILE_WIDTH + threadIdx.y;   //thread height in output featured map
-//     int w = (blockIdx.y % W_grid) * TILE_WIDTH + threadIdx.x;   //thread width in output featured map
-//     int b = blockIdx.z;
-//     float acc;
-
-//     /*Current Version*/
-//     /*Every thread caculate part of one element in one output featured map (one input map)*/
-//     if(m < M && h < H_out && w < W_out){
-//         acc = 0;
-
-//         for (int c = 0; c < C; c++){    // sum over all input feature maps
-//             acc += x4d(b, c, h + 0, w + 0) * k4d(m, c, 0, 0);
-//             acc += x4d(b, c, h + 0, w + 1) * k4d(m, c, 0, 1);
-//             acc += x4d(b, c, h + 0, w + 2) * k4d(m, c, 0, 2);
-//             acc += x4d(b, c, h + 0, w + 3) * k4d(m, c, 0, 3);
-//             acc += x4d(b, c, h + 0, w + 4) * k4d(m, c, 0, 4);
-//             acc += x4d(b, c, h + 0, w + 5) * k4d(m, c, 0, 5);
-//             acc += x4d(b, c, h + 0, w + 6) * k4d(m, c, 0, 6);
-
-//             acc += x4d(b, c, h + 1, w + 0) * k4d(m, c, 1, 0);
-//             acc += x4d(b, c, h + 1, w + 1) * k4d(m, c, 1, 1);
-//             acc += x4d(b, c, h + 1, w + 2) * k4d(m, c, 1, 2);
-//             acc += x4d(b, c, h + 1, w + 3) * k4d(m, c, 1, 3);
-//             acc += x4d(b, c, h + 1, w + 4) * k4d(m, c, 1, 4);
-//             acc += x4d(b, c, h + 1, w + 5) * k4d(m, c, 1, 5);
-//             acc += x4d(b, c, h + 1, w + 6) * k4d(m, c, 1, 6);
-
-//             acc += x4d(b, c, h + 2, w + 0) * k4d(m, c, 2, 0);
-//             acc += x4d(b, c, h + 2, w + 1) * k4d(m, c, 2, 1);
-//             acc += x4d(b, c, h + 2, w + 2) * k4d(m, c, 2, 2);
-//             acc += x4d(b, c, h + 2, w + 3) * k4d(m, c, 2, 3);
-//             acc += x4d(b, c, h + 2, w + 4) * k4d(m, c, 2, 4);
-//             acc += x4d(b, c, h + 2, w + 5) * k4d(m, c, 2, 5);
-//             acc += x4d(b, c, h + 2, w + 6) * k4d(m, c, 2, 6);
-
-//             acc += x4d(b, c, h + 3, w + 0) * k4d(m, c, 3, 0);
-//             acc += x4d(b, c, h + 3, w + 1) * k4d(m, c, 3, 1);
-//             acc += x4d(b, c, h + 3, w + 2) * k4d(m, c, 3, 2);
-//             acc += x4d(b, c, h + 3, w + 3) * k4d(m, c, 3, 3);
-//             acc += x4d(b, c, h + 3, w + 4) * k4d(m, c, 3, 4);
-//             acc += x4d(b, c, h + 3, w + 5) * k4d(m, c, 3, 5);
-//             acc += x4d(b, c, h + 3, w + 6) * k4d(m, c, 3, 6);
-
-//             acc += x4d(b, c, h + 4, w + 0) * k4d(m, c, 4, 0);
-//             acc += x4d(b, c, h + 4, w + 1) * k4d(m, c, 4, 1);
-//             acc += x4d(b, c, h + 4, w + 2) * k4d(m, c, 4, 2);
-//             acc += x4d(b, c, h + 4, w + 3) * k4d(m, c, 4, 3);
-//             acc += x4d(b, c, h + 4, w + 4) * k4d(m, c, 4, 4);
-//             acc += x4d(b, c, h + 4, w + 5) * k4d(m, c, 4, 5);
-//             acc += x4d(b, c, h + 4, w + 6) * k4d(m, c, 4, 6);
-
-//             acc += x4d(b, c, h + 5, w + 0) * k4d(m, c, 5, 0);
-//             acc += x4d(b, c, h + 5, w + 1) * k4d(m, c, 5, 1);
-//             acc += x4d(b, c, h + 5, w + 2) * k4d(m, c, 5, 2);
-//             acc += x4d(b, c, h + 5, w + 3) * k4d(m, c, 5, 3);
-//             acc += x4d(b, c, h + 5, w + 4) * k4d(m, c, 5, 4);
-//             acc += x4d(b, c, h + 5, w + 5) * k4d(m, c, 5, 5);
-//             acc += x4d(b, c, h + 5, w + 6) * k4d(m, c, 5, 6);
-
-//             acc += x4d(b, c, h + 6, w + 0) * k4d(m, c, 6, 0);
-//             acc += x4d(b, c, h + 6, w + 1) * k4d(m, c, 6, 1);
-//             acc += x4d(b, c, h + 6, w + 2) * k4d(m, c, 6, 2);
-//             acc += x4d(b, c, h + 6, w + 3) * k4d(m, c, 6, 3);
-//             acc += x4d(b, c, h + 6, w + 4) * k4d(m, c, 6, 4);
-//             acc += x4d(b, c, h + 6, w + 5) * k4d(m, c, 6, 5);
-//             acc += x4d(b, c, h + 6, w + 6) * k4d(m, c, 6, 6);
-//         }
-//         y4d(b , m , h , w) = acc;
-//     }
-
-
-// #undef y4d
-// #undef x4d
-// #undef k4d
-// }
-
-
-/*shared memory Version*/
+/*Shared Memory Version*/
 __global__ void forward_kernel_1(float *y, const float *x, const float *k, const int B, const int M, const int C, const int H, const int W, const int K)
 {
     const int H_out = H - K + 1;
@@ -167,10 +18,10 @@ __global__ void forward_kernel_1(float *y, const float *x, const float *k, const
 #define y4d(i3, i2, i1, i0) y[(i3) * (M * H_out * W_out) + (i2) * (H_out * W_out) + (i1) * (W_out) + i0]
 #define x4d(i3, i2, i1, i0) x[(i3) * (C * H * W) + (i2) * (H * W) + (i1) * (W) + i0]
 #define k4d(i3, i2, i1, i0) k[(i3) * (C * K * K) + (i2) * (K * K) + (i1) * (K) + i0]
+#define ck4d(i3, i2, i1, i0) const_kernel[(i3) * (C * K * K) + (i2) * (K * K) + (i1) * (K) + i0]
 
     const int X_tile_width = TILE_WIDTH_A + K - 1;
     // Reverted shared memory to float
-    __shared__ float shared_kernel[MAX_K][MAX_K];
     __shared__ float shared_input[TILE_WIDTH_A + MAX_K - 1][TILE_WIDTH_A + MAX_K - 1];
 
     int W_grid = (W_out + TILE_WIDTH_A - 1) / TILE_WIDTH_A;
@@ -185,98 +36,83 @@ __global__ void forward_kernel_1(float *y, const float *x, const float *k, const
     // Accumulator is float
     float acc = 0.0f;
 
-    // Removed #pragma unroll from c loop
-    for(int c = 0; c < C; c++){
-        // Load input tile into shared memory (as float)
-        // Removed #pragma unroll from loading loops
-        for (int i = threadIdx.y; i < X_tile_width; i += blockDim.y) {
-            for (int j = threadIdx.x; j < X_tile_width; j += blockDim.x) {
-                int row_in = h_base + i;
-                int col_in = w_base + j;
-                if (row_in >= 0 && row_in < H && col_in >= 0 && col_in < W) { // Add boundary checks
-                    shared_input[i][j] = x4d(b, c, row_in, col_in);
-                } else {
-                    // Pad with zero (float)
-                    shared_input[i][j] = 0.0f;
-                }
+    const int c = 0; 
+
+    // Load input tile into shared memory (as float)
+    // Removed #pragma unroll from loading loops
+    for (int i = threadIdx.y; i < X_tile_width; i += blockDim.y) {
+        for (int j = threadIdx.x; j < X_tile_width; j += blockDim.x) {
+            int row_in = h_base + i;
+            int col_in = w_base + j;
+            if (row_in < H &&  col_in < W) { // Add boundary checks
+                shared_input[i][j] = x4d(b, c, row_in, col_in);
             }
         }
-
-        // Load kernel tile into shared memory (as float)
-        // Check if m and c are valid before loading kernel weights
-        if (threadIdx.y < K && threadIdx.x < K) {
-             if (m < M && c < C) {
-                shared_kernel[threadIdx.y][threadIdx.x] = k4d(m, c, threadIdx.y, threadIdx.x);
-             } 
-        }
-        __syncthreads(); // Sync after loading shared memory
-
-        // Perform computation within the tile
-        // Check if the current thread's output pixel (h, w) is within bounds
-        if (h < H_out && w < W_out) {
-            // Explicitly unrolled loops assuming K=7
-            acc += shared_input[threadIdx.y + 0][threadIdx.x + 0] * shared_kernel[0][0];
-            acc += shared_input[threadIdx.y + 0][threadIdx.x + 1] * shared_kernel[0][1];
-            acc += shared_input[threadIdx.y + 0][threadIdx.x + 2] * shared_kernel[0][2];
-            acc += shared_input[threadIdx.y + 0][threadIdx.x + 3] * shared_kernel[0][3];
-            acc += shared_input[threadIdx.y + 0][threadIdx.x + 4] * shared_kernel[0][4];
-            acc += shared_input[threadIdx.y + 0][threadIdx.x + 5] * shared_kernel[0][5];
-            acc += shared_input[threadIdx.y + 0][threadIdx.x + 6] * shared_kernel[0][6];
-            acc += shared_input[threadIdx.y + 1][threadIdx.x + 0] * shared_kernel[1][0];
-            acc += shared_input[threadIdx.y + 1][threadIdx.x + 1] * shared_kernel[1][1];
-            acc += shared_input[threadIdx.y + 1][threadIdx.x + 2] * shared_kernel[1][2];
-            acc += shared_input[threadIdx.y + 1][threadIdx.x + 3] * shared_kernel[1][3];
-            acc += shared_input[threadIdx.y + 1][threadIdx.x + 4] * shared_kernel[1][4];
-            acc += shared_input[threadIdx.y + 1][threadIdx.x + 5] * shared_kernel[1][5];
-            acc += shared_input[threadIdx.y + 1][threadIdx.x + 6] * shared_kernel[1][6];
-            acc += shared_input[threadIdx.y + 2][threadIdx.x + 0] * shared_kernel[2][0];
-            acc += shared_input[threadIdx.y + 2][threadIdx.x + 1] * shared_kernel[2][1];
-            acc += shared_input[threadIdx.y + 2][threadIdx.x + 2] * shared_kernel[2][2];
-            acc += shared_input[threadIdx.y + 2][threadIdx.x + 3] * shared_kernel[2][3];
-            acc += shared_input[threadIdx.y + 2][threadIdx.x + 4] * shared_kernel[2][4];
-            acc += shared_input[threadIdx.y + 2][threadIdx.x + 5] * shared_kernel[2][5];
-            acc += shared_input[threadIdx.y + 2][threadIdx.x + 6] * shared_kernel[2][6];
-            acc += shared_input[threadIdx.y + 3][threadIdx.x + 0] * shared_kernel[3][0];
-            acc += shared_input[threadIdx.y + 3][threadIdx.x + 1] * shared_kernel[3][1];
-            acc += shared_input[threadIdx.y + 3][threadIdx.x + 2] * shared_kernel[3][2];
-            acc += shared_input[threadIdx.y + 3][threadIdx.x + 3] * shared_kernel[3][3];
-            acc += shared_input[threadIdx.y + 3][threadIdx.x + 4] * shared_kernel[3][4];
-            acc += shared_input[threadIdx.y + 3][threadIdx.x + 5] * shared_kernel[3][5];
-            acc += shared_input[threadIdx.y + 3][threadIdx.x + 6] * shared_kernel[3][6];
-            acc += shared_input[threadIdx.y + 4][threadIdx.x + 0] * shared_kernel[4][0];
-            acc += shared_input[threadIdx.y + 4][threadIdx.x + 1] * shared_kernel[4][1];
-            acc += shared_input[threadIdx.y + 4][threadIdx.x + 2] * shared_kernel[4][2];
-            acc += shared_input[threadIdx.y + 4][threadIdx.x + 3] * shared_kernel[4][3];
-            acc += shared_input[threadIdx.y + 4][threadIdx.x + 4] * shared_kernel[4][4];
-            acc += shared_input[threadIdx.y + 4][threadIdx.x + 5] * shared_kernel[4][5];
-            acc += shared_input[threadIdx.y + 4][threadIdx.x + 6] * shared_kernel[4][6];
-            acc += shared_input[threadIdx.y + 5][threadIdx.x + 0] * shared_kernel[5][0];
-            acc += shared_input[threadIdx.y + 5][threadIdx.x + 1] * shared_kernel[5][1];
-            acc += shared_input[threadIdx.y + 5][threadIdx.x + 2] * shared_kernel[5][2];
-            acc += shared_input[threadIdx.y + 5][threadIdx.x + 3] * shared_kernel[5][3];
-            acc += shared_input[threadIdx.y + 5][threadIdx.x + 4] * shared_kernel[5][4];
-            acc += shared_input[threadIdx.y + 5][threadIdx.x + 5] * shared_kernel[5][5];
-            acc += shared_input[threadIdx.y + 5][threadIdx.x + 6] * shared_kernel[5][6];
-            acc += shared_input[threadIdx.y + 6][threadIdx.x + 0] * shared_kernel[6][0];
-            acc += shared_input[threadIdx.y + 6][threadIdx.x + 1] * shared_kernel[6][1];
-            acc += shared_input[threadIdx.y + 6][threadIdx.x + 2] * shared_kernel[6][2];
-            acc += shared_input[threadIdx.y + 6][threadIdx.x + 3] * shared_kernel[6][3];
-            acc += shared_input[threadIdx.y + 6][threadIdx.x + 4] * shared_kernel[6][4];
-            acc += shared_input[threadIdx.y + 6][threadIdx.x + 5] * shared_kernel[6][5];
-            acc += shared_input[threadIdx.y + 6][threadIdx.x + 6] * shared_kernel[6][6];
-
-        }
-        __syncthreads(); // Sync before loading next channel's data
     }
 
-    // Write final accumulated result (float)
-    if(m < M && h < H_out && w < W_out){
+    __syncthreads(); // Sync after loading shared memory
+
+    // Perform computation within the tile
+    // Check if the current thread's output pixel (h, w) is within bounds
+    if (h < H_out && w < W_out) {
+        // Explicitly unrolled loops assuming K=7
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 0] * ck4d(m, c, 0, 0);
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 1] * ck4d(m, c, 0, 1);
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 2] * ck4d(m, c, 0, 2);
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 3] * ck4d(m, c, 0, 3);
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 4] * ck4d(m, c, 0, 4);
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 5] * ck4d(m, c, 0, 5);
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 6] * ck4d(m, c, 0, 6);
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 0] * ck4d(m, c, 1, 0);
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 1] * ck4d(m, c, 1, 1);
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 2] * ck4d(m, c, 1, 2);
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 3] * ck4d(m, c, 1, 3);
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 4] * ck4d(m, c, 1, 4);
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 5] * ck4d(m, c, 1, 5);
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 6] * ck4d(m, c, 1, 6);
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 0] * ck4d(m, c, 2, 0);
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 1] * ck4d(m, c, 2, 1);
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 2] * ck4d(m, c, 2, 2);
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 3] * ck4d(m, c, 2, 3);
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 4] * ck4d(m, c, 2, 4);
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 5] * ck4d(m, c, 2, 5);
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 6] * ck4d(m, c, 2, 6);
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 0] * ck4d(m, c, 3, 0);
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 1] * ck4d(m, c, 3, 1);
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 2] * ck4d(m, c, 3, 2);
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 3] * ck4d(m, c, 3, 3);
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 4] * ck4d(m, c, 3, 4);
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 5] * ck4d(m, c, 3, 5);
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 6] * ck4d(m, c, 3, 6);
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 0] * ck4d(m, c, 4, 0);
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 1] * ck4d(m, c, 4, 1);
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 2] * ck4d(m, c, 4, 2);
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 3] * ck4d(m, c, 4, 3);
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 4] * ck4d(m, c, 4, 4);
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 5] * ck4d(m, c, 4, 5);
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 6] * ck4d(m, c, 4, 6);
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 0] * ck4d(m, c, 5, 0);
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 1] * ck4d(m, c, 5, 1);
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 2] * ck4d(m, c, 5, 2);
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 3] * ck4d(m, c, 5, 3);
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 4] * ck4d(m, c, 5, 4);
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 5] * ck4d(m, c, 5, 5);
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 6] * ck4d(m, c, 5, 6);
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 0] * ck4d(m, c, 6, 0);
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 1] * ck4d(m, c, 6, 1);
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 2] * ck4d(m, c, 6, 2);
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 3] * ck4d(m, c, 6, 3);
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 4] * ck4d(m, c, 6, 4);
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 5] * ck4d(m, c, 6, 5);
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 6] * ck4d(m, c, 6, 6);
+
         y4d(b, m, h, w) = acc;
     }
 
     #undef y4d
     #undef x4d
     #undef k4d
+    #undef ck4d
 }
 
 
@@ -295,105 +131,958 @@ __global__ void forward_kernel_2(float *y, const float *x, const float *k, const
     __shared__ float shared_kernel[MAX_K][MAX_K];
     __shared__ float shared_input[TILE_WIDTH_B + MAX_K - 1][TILE_WIDTH_B + MAX_K - 1];
 
-    int W_grid = (W_out + TILE_WIDTH_B - 1) / TILE_WIDTH_B;
+    const int W_grid = (W_out + TILE_WIDTH_B - 1) / TILE_WIDTH_B;
 
     int m = blockIdx.x;
-    int h_base = (blockIdx.y / W_grid) * TILE_WIDTH_B;
-    int w_base = (blockIdx.y % W_grid) * TILE_WIDTH_B;
-    int h = h_base + threadIdx.y;
-    int w = w_base + threadIdx.x;
+
     int b = blockIdx.z;
 
     // Accumulator is float
     float acc = 0.0f;
 
     // Removed #pragma unroll from c loop
-    for(int c = 0; c < C; c++){
-        // Load input tile into shared memory (as float)
-        // Removed #pragma unroll from loading loops
-        for (int i = threadIdx.y; i < X_tile_width; i += blockDim.y) {
-            for (int j = threadIdx.x; j < X_tile_width; j += blockDim.x) {
-                int row_in = h_base + i;
-                int col_in = w_base + j;
-                if (row_in >= 0 && row_in < H && col_in >= 0 && col_in < W) { // Add boundary checks
-                    shared_input[i][j] = x4d(b, c, row_in, col_in);
-                } else {
-                    // Pad with zero (float)
-                    shared_input[i][j] = 0.0f;
-                }
-            }
-        }
+    // Load input tile into shared memory (as float)
 
-        // Load kernel tile into shared memory (as float)
-        // Check if m and c are valid before loading kernel weights
-        if (threadIdx.y < K && threadIdx.x < K) {
-             if (m < M && c < C) {
-                shared_kernel[threadIdx.y][threadIdx.x] = k4d(m, c, threadIdx.y, threadIdx.x);
-             } 
-        }
-        __syncthreads(); // Sync after loading shared memory
-
-        // Perform computation within the tile
-        // Check if the current thread's output pixel (h, w) is within bounds
-        if (h < H_out && w < W_out) {
-            // Explicitly unrolled loops assuming K=7
-            acc += shared_input[threadIdx.y + 0][threadIdx.x + 0] * shared_kernel[0][0];
-            acc += shared_input[threadIdx.y + 0][threadIdx.x + 1] * shared_kernel[0][1];
-            acc += shared_input[threadIdx.y + 0][threadIdx.x + 2] * shared_kernel[0][2];
-            acc += shared_input[threadIdx.y + 0][threadIdx.x + 3] * shared_kernel[0][3];
-            acc += shared_input[threadIdx.y + 0][threadIdx.x + 4] * shared_kernel[0][4];
-            acc += shared_input[threadIdx.y + 0][threadIdx.x + 5] * shared_kernel[0][5];
-            acc += shared_input[threadIdx.y + 0][threadIdx.x + 6] * shared_kernel[0][6];
-            acc += shared_input[threadIdx.y + 1][threadIdx.x + 0] * shared_kernel[1][0];
-            acc += shared_input[threadIdx.y + 1][threadIdx.x + 1] * shared_kernel[1][1];
-            acc += shared_input[threadIdx.y + 1][threadIdx.x + 2] * shared_kernel[1][2];
-            acc += shared_input[threadIdx.y + 1][threadIdx.x + 3] * shared_kernel[1][3];
-            acc += shared_input[threadIdx.y + 1][threadIdx.x + 4] * shared_kernel[1][4];
-            acc += shared_input[threadIdx.y + 1][threadIdx.x + 5] * shared_kernel[1][5];
-            acc += shared_input[threadIdx.y + 1][threadIdx.x + 6] * shared_kernel[1][6];
-            acc += shared_input[threadIdx.y + 2][threadIdx.x + 0] * shared_kernel[2][0];
-            acc += shared_input[threadIdx.y + 2][threadIdx.x + 1] * shared_kernel[2][1];
-            acc += shared_input[threadIdx.y + 2][threadIdx.x + 2] * shared_kernel[2][2];
-            acc += shared_input[threadIdx.y + 2][threadIdx.x + 3] * shared_kernel[2][3];
-            acc += shared_input[threadIdx.y + 2][threadIdx.x + 4] * shared_kernel[2][4];
-            acc += shared_input[threadIdx.y + 2][threadIdx.x + 5] * shared_kernel[2][5];
-            acc += shared_input[threadIdx.y + 2][threadIdx.x + 6] * shared_kernel[2][6];
-            acc += shared_input[threadIdx.y + 3][threadIdx.x + 0] * shared_kernel[3][0];
-            acc += shared_input[threadIdx.y + 3][threadIdx.x + 1] * shared_kernel[3][1];
-            acc += shared_input[threadIdx.y + 3][threadIdx.x + 2] * shared_kernel[3][2];
-            acc += shared_input[threadIdx.y + 3][threadIdx.x + 3] * shared_kernel[3][3];
-            acc += shared_input[threadIdx.y + 3][threadIdx.x + 4] * shared_kernel[3][4];
-            acc += shared_input[threadIdx.y + 3][threadIdx.x + 5] * shared_kernel[3][5];
-            acc += shared_input[threadIdx.y + 3][threadIdx.x + 6] * shared_kernel[3][6];
-            acc += shared_input[threadIdx.y + 4][threadIdx.x + 0] * shared_kernel[4][0];
-            acc += shared_input[threadIdx.y + 4][threadIdx.x + 1] * shared_kernel[4][1];
-            acc += shared_input[threadIdx.y + 4][threadIdx.x + 2] * shared_kernel[4][2];
-            acc += shared_input[threadIdx.y + 4][threadIdx.x + 3] * shared_kernel[4][3];
-            acc += shared_input[threadIdx.y + 4][threadIdx.x + 4] * shared_kernel[4][4];
-            acc += shared_input[threadIdx.y + 4][threadIdx.x + 5] * shared_kernel[4][5];
-            acc += shared_input[threadIdx.y + 4][threadIdx.x + 6] * shared_kernel[4][6];
-            acc += shared_input[threadIdx.y + 5][threadIdx.x + 0] * shared_kernel[5][0];
-            acc += shared_input[threadIdx.y + 5][threadIdx.x + 1] * shared_kernel[5][1];
-            acc += shared_input[threadIdx.y + 5][threadIdx.x + 2] * shared_kernel[5][2];
-            acc += shared_input[threadIdx.y + 5][threadIdx.x + 3] * shared_kernel[5][3];
-            acc += shared_input[threadIdx.y + 5][threadIdx.x + 4] * shared_kernel[5][4];
-            acc += shared_input[threadIdx.y + 5][threadIdx.x + 5] * shared_kernel[5][5];
-            acc += shared_input[threadIdx.y + 5][threadIdx.x + 6] * shared_kernel[5][6];
-            acc += shared_input[threadIdx.y + 6][threadIdx.x + 0] * shared_kernel[6][0];
-            acc += shared_input[threadIdx.y + 6][threadIdx.x + 1] * shared_kernel[6][1];
-            acc += shared_input[threadIdx.y + 6][threadIdx.x + 2] * shared_kernel[6][2];
-            acc += shared_input[threadIdx.y + 6][threadIdx.x + 3] * shared_kernel[6][3];
-            acc += shared_input[threadIdx.y + 6][threadIdx.x + 4] * shared_kernel[6][4];
-            acc += shared_input[threadIdx.y + 6][threadIdx.x + 5] * shared_kernel[6][5];
-            acc += shared_input[threadIdx.y + 6][threadIdx.x + 6] * shared_kernel[6][6];
-
-        }
-        __syncthreads(); // Sync before loading next channel's data
+    shared_input[threadIdx.y][threadIdx.x] = x4d(b, 0, threadIdx.y, threadIdx.x);
+    if(threadIdx.y == 0){
+        shared_input[threadIdx.x][32] = x4d(b, 0, threadIdx.x, 32);
+        shared_input[32][threadIdx.x] = x4d(b, 0, 32, threadIdx.x);
+        shared_input[32][32] = x4d(b, 0, 32, 32);
     }
 
+
+    // Load kernel tile into shared memory (as float)
+    // Check if m and c are valid before loading kernel weights
+    if (threadIdx.y < K && threadIdx.x < K) {
+        shared_kernel[threadIdx.y][threadIdx.x] = k4d(m, 0, threadIdx.y, threadIdx.x);
+    }
+
+    
+    __syncthreads(); // Sync after loading shared memory
+
+    // Perform computation within the tile
+    // Check if the current thread's output pixel (h, w) is within bounds
+    if (threadIdx.y < H_out && threadIdx.x < W_out) {
+        // Explicitly unrolled loops assuming K=7
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 0] * shared_kernel[0][0];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 1] * shared_kernel[0][1];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 2] * shared_kernel[0][2];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 3] * shared_kernel[0][3];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 4] * shared_kernel[0][4];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 5] * shared_kernel[0][5];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 6] * shared_kernel[0][6];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 0] * shared_kernel[1][0];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 1] * shared_kernel[1][1];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 2] * shared_kernel[1][2];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 3] * shared_kernel[1][3];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 4] * shared_kernel[1][4];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 5] * shared_kernel[1][5];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 6] * shared_kernel[1][6];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 0] * shared_kernel[2][0];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 1] * shared_kernel[2][1];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 2] * shared_kernel[2][2];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 3] * shared_kernel[2][3];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 4] * shared_kernel[2][4];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 5] * shared_kernel[2][5];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 6] * shared_kernel[2][6];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 0] * shared_kernel[3][0];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 1] * shared_kernel[3][1];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 2] * shared_kernel[3][2];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 3] * shared_kernel[3][3];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 4] * shared_kernel[3][4];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 5] * shared_kernel[3][5];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 6] * shared_kernel[3][6];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 0] * shared_kernel[4][0];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 1] * shared_kernel[4][1];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 2] * shared_kernel[4][2];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 3] * shared_kernel[4][3];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 4] * shared_kernel[4][4];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 5] * shared_kernel[4][5];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 6] * shared_kernel[4][6];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 0] * shared_kernel[5][0];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 1] * shared_kernel[5][1];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 2] * shared_kernel[5][2];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 3] * shared_kernel[5][3];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 4] * shared_kernel[5][4];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 5] * shared_kernel[5][5];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 6] * shared_kernel[5][6];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 0] * shared_kernel[6][0];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 1] * shared_kernel[6][1];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 2] * shared_kernel[6][2];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 3] * shared_kernel[6][3];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 4] * shared_kernel[6][4];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 5] * shared_kernel[6][5];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 6] * shared_kernel[6][6];
+
+    }
+    __syncthreads(); // Sync before loading next channel's data
+
+
+
+    // Load input tile into shared memory (as float)
+
+    shared_input[threadIdx.y][threadIdx.x] = x4d(b, 1, threadIdx.y, threadIdx.x);
+    if(threadIdx.y == 0){
+        shared_input[threadIdx.x][32] = x4d(b, 1, threadIdx.x, 32);
+        shared_input[32][threadIdx.x] = x4d(b, 1, 32, threadIdx.x);
+        shared_input[32][32] = x4d(b, 1, 32, 32);
+    }
+
+
+    // Load kernel tile into shared memory (as float)
+    // Check if m and c are valid before loading kernel weights
+    if (threadIdx.y < K && threadIdx.x < K) {
+        shared_kernel[threadIdx.y][threadIdx.x] = k4d(m, 1, threadIdx.y, threadIdx.x);
+    }
+
+
+    
+    __syncthreads(); // Sync after loading shared memory
+
+    // Perform computation within the tile
+    // Check if the current thread's output pixel (h, w) is within bounds
+    if (threadIdx.y < H_out && threadIdx.x < W_out) {
+        // Explicitly unrolled loops assuming K=7
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 0] * shared_kernel[0][0];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 1] * shared_kernel[0][1];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 2] * shared_kernel[0][2];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 3] * shared_kernel[0][3];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 4] * shared_kernel[0][4];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 5] * shared_kernel[0][5];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 6] * shared_kernel[0][6];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 0] * shared_kernel[1][0];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 1] * shared_kernel[1][1];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 2] * shared_kernel[1][2];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 3] * shared_kernel[1][3];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 4] * shared_kernel[1][4];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 5] * shared_kernel[1][5];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 6] * shared_kernel[1][6];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 0] * shared_kernel[2][0];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 1] * shared_kernel[2][1];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 2] * shared_kernel[2][2];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 3] * shared_kernel[2][3];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 4] * shared_kernel[2][4];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 5] * shared_kernel[2][5];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 6] * shared_kernel[2][6];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 0] * shared_kernel[3][0];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 1] * shared_kernel[3][1];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 2] * shared_kernel[3][2];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 3] * shared_kernel[3][3];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 4] * shared_kernel[3][4];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 5] * shared_kernel[3][5];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 6] * shared_kernel[3][6];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 0] * shared_kernel[4][0];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 1] * shared_kernel[4][1];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 2] * shared_kernel[4][2];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 3] * shared_kernel[4][3];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 4] * shared_kernel[4][4];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 5] * shared_kernel[4][5];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 6] * shared_kernel[4][6];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 0] * shared_kernel[5][0];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 1] * shared_kernel[5][1];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 2] * shared_kernel[5][2];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 3] * shared_kernel[5][3];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 4] * shared_kernel[5][4];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 5] * shared_kernel[5][5];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 6] * shared_kernel[5][6];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 0] * shared_kernel[6][0];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 1] * shared_kernel[6][1];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 2] * shared_kernel[6][2];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 3] * shared_kernel[6][3];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 4] * shared_kernel[6][4];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 5] * shared_kernel[6][5];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 6] * shared_kernel[6][6];
+
+    }
+    __syncthreads(); // Sync before loading next channel's data
+
+
+
+    // Load input tile into shared memory (as float)
+
+    shared_input[threadIdx.y][threadIdx.x] = x4d(b, 2, threadIdx.y, threadIdx.x);
+    if(threadIdx.y == 0){
+        shared_input[threadIdx.x][32] = x4d(b, 2, threadIdx.x, 32);
+        shared_input[32][threadIdx.x] = x4d(b, 2, 32, threadIdx.x);
+        shared_input[32][32] = x4d(b, 2, 32, 32);
+    }
+
+
+    // Load kernel tile into shared memory (as float)
+    // Check if m and c are valid before loading kernel weights
+    if (threadIdx.y < K && threadIdx.x < K) {
+        shared_kernel[threadIdx.y][threadIdx.x] = k4d(m, 2, threadIdx.y, threadIdx.x);
+    }
+
+    
+    __syncthreads(); // Sync after loading shared memory
+
+    // Perform computation within the tile
+    // Check if the current thread's output pixel (h, w) is within bounds
+    if (threadIdx.y < H_out && threadIdx.x < W_out) {
+        // Explicitly unrolled loops assuming K=7
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 0] * shared_kernel[0][0];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 1] * shared_kernel[0][1];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 2] * shared_kernel[0][2];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 3] * shared_kernel[0][3];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 4] * shared_kernel[0][4];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 5] * shared_kernel[0][5];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 6] * shared_kernel[0][6];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 0] * shared_kernel[1][0];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 1] * shared_kernel[1][1];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 2] * shared_kernel[1][2];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 3] * shared_kernel[1][3];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 4] * shared_kernel[1][4];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 5] * shared_kernel[1][5];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 6] * shared_kernel[1][6];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 0] * shared_kernel[2][0];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 1] * shared_kernel[2][1];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 2] * shared_kernel[2][2];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 3] * shared_kernel[2][3];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 4] * shared_kernel[2][4];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 5] * shared_kernel[2][5];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 6] * shared_kernel[2][6];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 0] * shared_kernel[3][0];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 1] * shared_kernel[3][1];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 2] * shared_kernel[3][2];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 3] * shared_kernel[3][3];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 4] * shared_kernel[3][4];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 5] * shared_kernel[3][5];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 6] * shared_kernel[3][6];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 0] * shared_kernel[4][0];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 1] * shared_kernel[4][1];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 2] * shared_kernel[4][2];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 3] * shared_kernel[4][3];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 4] * shared_kernel[4][4];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 5] * shared_kernel[4][5];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 6] * shared_kernel[4][6];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 0] * shared_kernel[5][0];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 1] * shared_kernel[5][1];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 2] * shared_kernel[5][2];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 3] * shared_kernel[5][3];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 4] * shared_kernel[5][4];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 5] * shared_kernel[5][5];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 6] * shared_kernel[5][6];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 0] * shared_kernel[6][0];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 1] * shared_kernel[6][1];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 2] * shared_kernel[6][2];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 3] * shared_kernel[6][3];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 4] * shared_kernel[6][4];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 5] * shared_kernel[6][5];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 6] * shared_kernel[6][6];
+
+    }
+    __syncthreads(); // Sync before loading next channel's data
+
+
+
+    // Load input tile into shared memory (as float)
+
+    shared_input[threadIdx.y][threadIdx.x] = x4d(b, 3, threadIdx.y, threadIdx.x);
+    if(threadIdx.y == 0){
+        shared_input[threadIdx.x][32] = x4d(b, 3, threadIdx.x, 32);
+        shared_input[32][threadIdx.x] = x4d(b, 3, 32, threadIdx.x);
+        shared_input[32][32] = x4d(b, 3, 32, 32);
+    }
+
+
+    // Load kernel tile into shared memory (as float)
+    // Check if m and c are valid before loading kernel weights
+    if (threadIdx.y < K && threadIdx.x < K) {
+        shared_kernel[threadIdx.y][threadIdx.x] = k4d(m, 3, threadIdx.y, threadIdx.x);
+    }
+    
+    __syncthreads(); // Sync after loading shared memory
+
+    // Perform computation within the tile
+    // Check if the current thread's output pixel (h, w) is within bounds
+    if (threadIdx.y < H_out && threadIdx.x < W_out) {
+        // Explicitly unrolled loops assuming K=7
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 0] * shared_kernel[0][0];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 1] * shared_kernel[0][1];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 2] * shared_kernel[0][2];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 3] * shared_kernel[0][3];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 4] * shared_kernel[0][4];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 5] * shared_kernel[0][5];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 6] * shared_kernel[0][6];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 0] * shared_kernel[1][0];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 1] * shared_kernel[1][1];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 2] * shared_kernel[1][2];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 3] * shared_kernel[1][3];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 4] * shared_kernel[1][4];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 5] * shared_kernel[1][5];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 6] * shared_kernel[1][6];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 0] * shared_kernel[2][0];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 1] * shared_kernel[2][1];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 2] * shared_kernel[2][2];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 3] * shared_kernel[2][3];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 4] * shared_kernel[2][4];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 5] * shared_kernel[2][5];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 6] * shared_kernel[2][6];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 0] * shared_kernel[3][0];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 1] * shared_kernel[3][1];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 2] * shared_kernel[3][2];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 3] * shared_kernel[3][3];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 4] * shared_kernel[3][4];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 5] * shared_kernel[3][5];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 6] * shared_kernel[3][6];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 0] * shared_kernel[4][0];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 1] * shared_kernel[4][1];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 2] * shared_kernel[4][2];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 3] * shared_kernel[4][3];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 4] * shared_kernel[4][4];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 5] * shared_kernel[4][5];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 6] * shared_kernel[4][6];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 0] * shared_kernel[5][0];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 1] * shared_kernel[5][1];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 2] * shared_kernel[5][2];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 3] * shared_kernel[5][3];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 4] * shared_kernel[5][4];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 5] * shared_kernel[5][5];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 6] * shared_kernel[5][6];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 0] * shared_kernel[6][0];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 1] * shared_kernel[6][1];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 2] * shared_kernel[6][2];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 3] * shared_kernel[6][3];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 4] * shared_kernel[6][4];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 5] * shared_kernel[6][5];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 6] * shared_kernel[6][6];
+
+    }
+    __syncthreads(); // Sync before loading next channel's data
+
+
+
+    // Load input tile into shared memory (as float)
+
+    shared_input[threadIdx.y][threadIdx.x] = x4d(b, 4, threadIdx.y, threadIdx.x);
+    if(threadIdx.y == 0){
+        shared_input[threadIdx.x][32] = x4d(b, 4, threadIdx.x, 32);
+        shared_input[32][threadIdx.x] = x4d(b, 4, 32, threadIdx.x);
+        shared_input[32][32] = x4d(b, 4, 32, 32);
+    }
+
+
+    // Load kernel tile into shared memory (as float)
+    // Check if m and c are valid before loading kernel weights
+    if (threadIdx.y < K && threadIdx.x < K) {
+        shared_kernel[threadIdx.y][threadIdx.x] = k4d(m, 4, threadIdx.y, threadIdx.x);
+    }
+    
+    __syncthreads(); // Sync after loading shared memory
+
+    // Perform computation within the tile
+    // Check if the current thread's output pixel (h, w) is within bounds
+    if (threadIdx.y < H_out && threadIdx.x < W_out) {
+        // Explicitly unrolled loops assuming K=7
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 0] * shared_kernel[0][0];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 1] * shared_kernel[0][1];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 2] * shared_kernel[0][2];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 3] * shared_kernel[0][3];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 4] * shared_kernel[0][4];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 5] * shared_kernel[0][5];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 6] * shared_kernel[0][6];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 0] * shared_kernel[1][0];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 1] * shared_kernel[1][1];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 2] * shared_kernel[1][2];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 3] * shared_kernel[1][3];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 4] * shared_kernel[1][4];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 5] * shared_kernel[1][5];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 6] * shared_kernel[1][6];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 0] * shared_kernel[2][0];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 1] * shared_kernel[2][1];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 2] * shared_kernel[2][2];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 3] * shared_kernel[2][3];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 4] * shared_kernel[2][4];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 5] * shared_kernel[2][5];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 6] * shared_kernel[2][6];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 0] * shared_kernel[3][0];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 1] * shared_kernel[3][1];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 2] * shared_kernel[3][2];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 3] * shared_kernel[3][3];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 4] * shared_kernel[3][4];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 5] * shared_kernel[3][5];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 6] * shared_kernel[3][6];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 0] * shared_kernel[4][0];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 1] * shared_kernel[4][1];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 2] * shared_kernel[4][2];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 3] * shared_kernel[4][3];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 4] * shared_kernel[4][4];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 5] * shared_kernel[4][5];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 6] * shared_kernel[4][6];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 0] * shared_kernel[5][0];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 1] * shared_kernel[5][1];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 2] * shared_kernel[5][2];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 3] * shared_kernel[5][3];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 4] * shared_kernel[5][4];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 5] * shared_kernel[5][5];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 6] * shared_kernel[5][6];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 0] * shared_kernel[6][0];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 1] * shared_kernel[6][1];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 2] * shared_kernel[6][2];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 3] * shared_kernel[6][3];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 4] * shared_kernel[6][4];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 5] * shared_kernel[6][5];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 6] * shared_kernel[6][6];
+
+    }
+    __syncthreads(); // Sync before loading next channel's data
+
+
+
+    // Load input tile into shared memory (as float)
+
+    shared_input[threadIdx.y][threadIdx.x] = x4d(b, 5, threadIdx.y, threadIdx.x);
+    if(threadIdx.y == 0){
+        shared_input[threadIdx.x][32] = x4d(b, 5, threadIdx.x, 32);
+        shared_input[32][threadIdx.x] = x4d(b, 5, 32, threadIdx.x);
+        shared_input[32][32] = x4d(b, 5, 32, 32);
+    }
+
+
+    // Load kernel tile into shared memory (as float)
+    // Check if m and c are valid before loading kernel weights
+    if (threadIdx.y < K && threadIdx.x < K) {
+        shared_kernel[threadIdx.y][threadIdx.x] = k4d(m, 5, threadIdx.y, threadIdx.x);
+    }
+    
+    __syncthreads(); // Sync after loading shared memory
+
+    // Perform computation within the tile
+    // Check if the current thread's output pixel (h, w) is within bounds
+    if (threadIdx.y < H_out && threadIdx.x < W_out) {
+        // Explicitly unrolled loops assuming K=7
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 0] * shared_kernel[0][0];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 1] * shared_kernel[0][1];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 2] * shared_kernel[0][2];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 3] * shared_kernel[0][3];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 4] * shared_kernel[0][4];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 5] * shared_kernel[0][5];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 6] * shared_kernel[0][6];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 0] * shared_kernel[1][0];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 1] * shared_kernel[1][1];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 2] * shared_kernel[1][2];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 3] * shared_kernel[1][3];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 4] * shared_kernel[1][4];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 5] * shared_kernel[1][5];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 6] * shared_kernel[1][6];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 0] * shared_kernel[2][0];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 1] * shared_kernel[2][1];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 2] * shared_kernel[2][2];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 3] * shared_kernel[2][3];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 4] * shared_kernel[2][4];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 5] * shared_kernel[2][5];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 6] * shared_kernel[2][6];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 0] * shared_kernel[3][0];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 1] * shared_kernel[3][1];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 2] * shared_kernel[3][2];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 3] * shared_kernel[3][3];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 4] * shared_kernel[3][4];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 5] * shared_kernel[3][5];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 6] * shared_kernel[3][6];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 0] * shared_kernel[4][0];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 1] * shared_kernel[4][1];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 2] * shared_kernel[4][2];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 3] * shared_kernel[4][3];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 4] * shared_kernel[4][4];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 5] * shared_kernel[4][5];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 6] * shared_kernel[4][6];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 0] * shared_kernel[5][0];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 1] * shared_kernel[5][1];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 2] * shared_kernel[5][2];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 3] * shared_kernel[5][3];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 4] * shared_kernel[5][4];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 5] * shared_kernel[5][5];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 6] * shared_kernel[5][6];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 0] * shared_kernel[6][0];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 1] * shared_kernel[6][1];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 2] * shared_kernel[6][2];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 3] * shared_kernel[6][3];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 4] * shared_kernel[6][4];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 5] * shared_kernel[6][5];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 6] * shared_kernel[6][6];
+
+    }
+    __syncthreads(); // Sync before loading next channel's data
+
+
+
+
+    // Load input tile into shared memory (as float)
+
+    shared_input[threadIdx.y][threadIdx.x] = x4d(b, 6, threadIdx.y, threadIdx.x);
+    if(threadIdx.y == 0){
+        shared_input[threadIdx.x][32] = x4d(b, 6, threadIdx.x, 32);
+        shared_input[32][threadIdx.x] = x4d(b, 6, 32, threadIdx.x);
+        shared_input[32][32] = x4d(b, 6, 32, 32);
+    }
+
+
+    // Load kernel tile into shared memory (as float)
+    // Check if m and c are valid before loading kernel weights
+    if (threadIdx.y < K && threadIdx.x < K) {
+        shared_kernel[threadIdx.y][threadIdx.x] = k4d(m, 6, threadIdx.y, threadIdx.x);
+    }
+    
+    __syncthreads(); // Sync after loading shared memory
+
+    // Perform computation within the tile
+    // Check if the current thread's output pixel (h, w) is within bounds
+    if (threadIdx.y < H_out && threadIdx.x < W_out) {
+        // Explicitly unrolled loops assuming K=7
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 0] * shared_kernel[0][0];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 1] * shared_kernel[0][1];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 2] * shared_kernel[0][2];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 3] * shared_kernel[0][3];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 4] * shared_kernel[0][4];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 5] * shared_kernel[0][5];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 6] * shared_kernel[0][6];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 0] * shared_kernel[1][0];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 1] * shared_kernel[1][1];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 2] * shared_kernel[1][2];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 3] * shared_kernel[1][3];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 4] * shared_kernel[1][4];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 5] * shared_kernel[1][5];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 6] * shared_kernel[1][6];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 0] * shared_kernel[2][0];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 1] * shared_kernel[2][1];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 2] * shared_kernel[2][2];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 3] * shared_kernel[2][3];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 4] * shared_kernel[2][4];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 5] * shared_kernel[2][5];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 6] * shared_kernel[2][6];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 0] * shared_kernel[3][0];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 1] * shared_kernel[3][1];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 2] * shared_kernel[3][2];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 3] * shared_kernel[3][3];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 4] * shared_kernel[3][4];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 5] * shared_kernel[3][5];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 6] * shared_kernel[3][6];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 0] * shared_kernel[4][0];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 1] * shared_kernel[4][1];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 2] * shared_kernel[4][2];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 3] * shared_kernel[4][3];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 4] * shared_kernel[4][4];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 5] * shared_kernel[4][5];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 6] * shared_kernel[4][6];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 0] * shared_kernel[5][0];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 1] * shared_kernel[5][1];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 2] * shared_kernel[5][2];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 3] * shared_kernel[5][3];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 4] * shared_kernel[5][4];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 5] * shared_kernel[5][5];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 6] * shared_kernel[5][6];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 0] * shared_kernel[6][0];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 1] * shared_kernel[6][1];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 2] * shared_kernel[6][2];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 3] * shared_kernel[6][3];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 4] * shared_kernel[6][4];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 5] * shared_kernel[6][5];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 6] * shared_kernel[6][6];
+
+    }
+    __syncthreads(); // Sync before loading next channel's data
+
+
+
+
+    // Load input tile into shared memory (as float)
+
+    shared_input[threadIdx.y][threadIdx.x] = x4d(b, 7, threadIdx.y, threadIdx.x);
+    if(threadIdx.y == 0){
+        shared_input[threadIdx.x][32] = x4d(b, 7, threadIdx.x, 32);
+        shared_input[32][threadIdx.x] = x4d(b, 7, 32, threadIdx.x);
+        shared_input[32][32] = x4d(b, 7, 32, 32);
+    }
+
+
+    // Load kernel tile into shared memory (as float)
+    // Check if m and c are valid before loading kernel weights
+    if (threadIdx.y < K && threadIdx.x < K) {
+        shared_kernel[threadIdx.y][threadIdx.x] = k4d(m, 7, threadIdx.y, threadIdx.x);
+    }
+    
+    __syncthreads(); // Sync after loading shared memory
+
+    // Perform computation within the tile
+    // Check if the current thread's output pixel (h, w) is within bounds
+    if (threadIdx.y < H_out && threadIdx.x < W_out) {
+        // Explicitly unrolled loops assuming K=7
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 0] * shared_kernel[0][0];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 1] * shared_kernel[0][1];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 2] * shared_kernel[0][2];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 3] * shared_kernel[0][3];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 4] * shared_kernel[0][4];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 5] * shared_kernel[0][5];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 6] * shared_kernel[0][6];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 0] * shared_kernel[1][0];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 1] * shared_kernel[1][1];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 2] * shared_kernel[1][2];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 3] * shared_kernel[1][3];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 4] * shared_kernel[1][4];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 5] * shared_kernel[1][5];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 6] * shared_kernel[1][6];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 0] * shared_kernel[2][0];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 1] * shared_kernel[2][1];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 2] * shared_kernel[2][2];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 3] * shared_kernel[2][3];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 4] * shared_kernel[2][4];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 5] * shared_kernel[2][5];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 6] * shared_kernel[2][6];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 0] * shared_kernel[3][0];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 1] * shared_kernel[3][1];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 2] * shared_kernel[3][2];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 3] * shared_kernel[3][3];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 4] * shared_kernel[3][4];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 5] * shared_kernel[3][5];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 6] * shared_kernel[3][6];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 0] * shared_kernel[4][0];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 1] * shared_kernel[4][1];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 2] * shared_kernel[4][2];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 3] * shared_kernel[4][3];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 4] * shared_kernel[4][4];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 5] * shared_kernel[4][5];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 6] * shared_kernel[4][6];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 0] * shared_kernel[5][0];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 1] * shared_kernel[5][1];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 2] * shared_kernel[5][2];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 3] * shared_kernel[5][3];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 4] * shared_kernel[5][4];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 5] * shared_kernel[5][5];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 6] * shared_kernel[5][6];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 0] * shared_kernel[6][0];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 1] * shared_kernel[6][1];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 2] * shared_kernel[6][2];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 3] * shared_kernel[6][3];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 4] * shared_kernel[6][4];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 5] * shared_kernel[6][5];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 6] * shared_kernel[6][6];
+
+    }
+    __syncthreads(); // Sync before loading next channel's data
+
+
+
+
+
+    // Load input tile into shared memory (as float)
+
+    shared_input[threadIdx.y][threadIdx.x] = x4d(b, 8, threadIdx.y, threadIdx.x);
+    if(threadIdx.y == 0){
+        shared_input[threadIdx.x][32] = x4d(b, 8, threadIdx.x, 32);
+        shared_input[32][threadIdx.x] = x4d(b, 8, 32, threadIdx.x);
+        shared_input[32][32] = x4d(b, 8, 32, 32);
+    }
+
+
+    // Load kernel tile into shared memory (as float)
+    // Check if m and c are valid before loading kernel weights
+    if (threadIdx.y < K && threadIdx.x < K) {
+        shared_kernel[threadIdx.y][threadIdx.x] = k4d(m, 8, threadIdx.y, threadIdx.x);
+    }
+    
+    __syncthreads(); // Sync after loading shared memory
+
+    // Perform computation within the tile
+    // Check if the current thread's output pixel (h, w) is within bounds
+    if (threadIdx.y < H_out && threadIdx.x < W_out) {
+        // Explicitly unrolled loops assuming K=7
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 0] * shared_kernel[0][0];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 1] * shared_kernel[0][1];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 2] * shared_kernel[0][2];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 3] * shared_kernel[0][3];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 4] * shared_kernel[0][4];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 5] * shared_kernel[0][5];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 6] * shared_kernel[0][6];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 0] * shared_kernel[1][0];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 1] * shared_kernel[1][1];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 2] * shared_kernel[1][2];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 3] * shared_kernel[1][3];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 4] * shared_kernel[1][4];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 5] * shared_kernel[1][5];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 6] * shared_kernel[1][6];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 0] * shared_kernel[2][0];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 1] * shared_kernel[2][1];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 2] * shared_kernel[2][2];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 3] * shared_kernel[2][3];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 4] * shared_kernel[2][4];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 5] * shared_kernel[2][5];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 6] * shared_kernel[2][6];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 0] * shared_kernel[3][0];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 1] * shared_kernel[3][1];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 2] * shared_kernel[3][2];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 3] * shared_kernel[3][3];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 4] * shared_kernel[3][4];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 5] * shared_kernel[3][5];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 6] * shared_kernel[3][6];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 0] * shared_kernel[4][0];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 1] * shared_kernel[4][1];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 2] * shared_kernel[4][2];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 3] * shared_kernel[4][3];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 4] * shared_kernel[4][4];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 5] * shared_kernel[4][5];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 6] * shared_kernel[4][6];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 0] * shared_kernel[5][0];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 1] * shared_kernel[5][1];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 2] * shared_kernel[5][2];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 3] * shared_kernel[5][3];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 4] * shared_kernel[5][4];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 5] * shared_kernel[5][5];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 6] * shared_kernel[5][6];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 0] * shared_kernel[6][0];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 1] * shared_kernel[6][1];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 2] * shared_kernel[6][2];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 3] * shared_kernel[6][3];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 4] * shared_kernel[6][4];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 5] * shared_kernel[6][5];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 6] * shared_kernel[6][6];
+
+    }
+    __syncthreads(); // Sync before loading next channel's data
+
+
+
+
+    // Load input tile into shared memory (as float)
+
+    shared_input[threadIdx.y][threadIdx.x] = x4d(b, 9, threadIdx.y, threadIdx.x);
+    if(threadIdx.y == 0){
+        shared_input[threadIdx.x][32] = x4d(b, 9, threadIdx.x, 32);
+        shared_input[32][threadIdx.x] = x4d(b, 9, 32, threadIdx.x);
+        shared_input[32][32] = x4d(b, 9, 32, 32);
+    }
+
+
+    // Load kernel tile into shared memory (as float)
+    // Check if m and c are valid before loading kernel weights
+    if (threadIdx.y < K && threadIdx.x < K) {
+        shared_kernel[threadIdx.y][threadIdx.x] = k4d(m, 9, threadIdx.y, threadIdx.x);
+    }
+    
+    __syncthreads(); // Sync after loading shared memory
+
+    // Perform computation within the tile
+    // Check if the current thread's output pixel (h, w) is within bounds
+    if (threadIdx.y < H_out && threadIdx.x < W_out) {
+        // Explicitly unrolled loops assuming K=7
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 0] * shared_kernel[0][0];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 1] * shared_kernel[0][1];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 2] * shared_kernel[0][2];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 3] * shared_kernel[0][3];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 4] * shared_kernel[0][4];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 5] * shared_kernel[0][5];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 6] * shared_kernel[0][6];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 0] * shared_kernel[1][0];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 1] * shared_kernel[1][1];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 2] * shared_kernel[1][2];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 3] * shared_kernel[1][3];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 4] * shared_kernel[1][4];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 5] * shared_kernel[1][5];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 6] * shared_kernel[1][6];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 0] * shared_kernel[2][0];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 1] * shared_kernel[2][1];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 2] * shared_kernel[2][2];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 3] * shared_kernel[2][3];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 4] * shared_kernel[2][4];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 5] * shared_kernel[2][5];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 6] * shared_kernel[2][6];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 0] * shared_kernel[3][0];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 1] * shared_kernel[3][1];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 2] * shared_kernel[3][2];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 3] * shared_kernel[3][3];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 4] * shared_kernel[3][4];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 5] * shared_kernel[3][5];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 6] * shared_kernel[3][6];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 0] * shared_kernel[4][0];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 1] * shared_kernel[4][1];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 2] * shared_kernel[4][2];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 3] * shared_kernel[4][3];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 4] * shared_kernel[4][4];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 5] * shared_kernel[4][5];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 6] * shared_kernel[4][6];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 0] * shared_kernel[5][0];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 1] * shared_kernel[5][1];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 2] * shared_kernel[5][2];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 3] * shared_kernel[5][3];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 4] * shared_kernel[5][4];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 5] * shared_kernel[5][5];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 6] * shared_kernel[5][6];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 0] * shared_kernel[6][0];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 1] * shared_kernel[6][1];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 2] * shared_kernel[6][2];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 3] * shared_kernel[6][3];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 4] * shared_kernel[6][4];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 5] * shared_kernel[6][5];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 6] * shared_kernel[6][6];
+
+    }
+    __syncthreads(); // Sync before loading next channel's data
+
+
+
+
+
+    // Load input tile into shared memory (as float)
+
+    shared_input[threadIdx.y][threadIdx.x] = x4d(b, 10, threadIdx.y, threadIdx.x);
+    if(threadIdx.y == 0){
+        shared_input[threadIdx.x][32] = x4d(b, 10, threadIdx.x, 32);
+        shared_input[32][threadIdx.x] = x4d(b, 10, 32, threadIdx.x);
+        shared_input[32][32] = x4d(b, 10, 32, 32);
+    }
+
+
+    // Load kernel tile into shared memory (as float)
+    // Check if m and c are valid before loading kernel weights
+    if (threadIdx.y < K && threadIdx.x < K) {
+        shared_kernel[threadIdx.y][threadIdx.x] = k4d(m, 10, threadIdx.y, threadIdx.x);
+    }
+    
+    __syncthreads(); // Sync after loading shared memory
+
+    // Perform computation within the tile
+    // Check if the current thread's output pixel (h, w) is within bounds
+    if (threadIdx.y < H_out && threadIdx.x < W_out) {
+        // Explicitly unrolled loops assuming K=7
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 0] * shared_kernel[0][0];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 1] * shared_kernel[0][1];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 2] * shared_kernel[0][2];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 3] * shared_kernel[0][3];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 4] * shared_kernel[0][4];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 5] * shared_kernel[0][5];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 6] * shared_kernel[0][6];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 0] * shared_kernel[1][0];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 1] * shared_kernel[1][1];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 2] * shared_kernel[1][2];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 3] * shared_kernel[1][3];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 4] * shared_kernel[1][4];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 5] * shared_kernel[1][5];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 6] * shared_kernel[1][6];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 0] * shared_kernel[2][0];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 1] * shared_kernel[2][1];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 2] * shared_kernel[2][2];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 3] * shared_kernel[2][3];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 4] * shared_kernel[2][4];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 5] * shared_kernel[2][5];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 6] * shared_kernel[2][6];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 0] * shared_kernel[3][0];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 1] * shared_kernel[3][1];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 2] * shared_kernel[3][2];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 3] * shared_kernel[3][3];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 4] * shared_kernel[3][4];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 5] * shared_kernel[3][5];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 6] * shared_kernel[3][6];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 0] * shared_kernel[4][0];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 1] * shared_kernel[4][1];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 2] * shared_kernel[4][2];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 3] * shared_kernel[4][3];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 4] * shared_kernel[4][4];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 5] * shared_kernel[4][5];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 6] * shared_kernel[4][6];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 0] * shared_kernel[5][0];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 1] * shared_kernel[5][1];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 2] * shared_kernel[5][2];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 3] * shared_kernel[5][3];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 4] * shared_kernel[5][4];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 5] * shared_kernel[5][5];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 6] * shared_kernel[5][6];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 0] * shared_kernel[6][0];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 1] * shared_kernel[6][1];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 2] * shared_kernel[6][2];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 3] * shared_kernel[6][3];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 4] * shared_kernel[6][4];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 5] * shared_kernel[6][5];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 6] * shared_kernel[6][6];
+
+    }
+    __syncthreads(); // Sync before loading next channel's data
+
+
+
+
+
+    // Load input tile into shared memory (as float)
+
+    shared_input[threadIdx.y][threadIdx.x] = x4d(b, 11, threadIdx.y, threadIdx.x);
+    if(threadIdx.y == 0){
+        shared_input[threadIdx.x][32] = x4d(b, 11, threadIdx.x, 32);
+        shared_input[32][threadIdx.x] = x4d(b, 11, 32, threadIdx.x);
+        shared_input[32][32] = x4d(b, 11, 32, 32);
+    }
+
+
+    // Load kernel tile into shared memory (as float)
+    // Check if m and c are valid before loading kernel weights
+    if (threadIdx.y < K && threadIdx.x < K) {
+        shared_kernel[threadIdx.y][threadIdx.x] = k4d(m, 11, threadIdx.y, threadIdx.x);
+    }
+    
+    __syncthreads(); // Sync after loading shared memory
+
+    // Perform computation within the tile
+    // Check if the current thread's output pixel (h, w) is within bounds
+    if (threadIdx.y < H_out && threadIdx.x < W_out) {
+        // Explicitly unrolled loops assuming K=7
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 0] * shared_kernel[0][0];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 1] * shared_kernel[0][1];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 2] * shared_kernel[0][2];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 3] * shared_kernel[0][3];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 4] * shared_kernel[0][4];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 5] * shared_kernel[0][5];
+        acc += shared_input[threadIdx.y + 0][threadIdx.x + 6] * shared_kernel[0][6];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 0] * shared_kernel[1][0];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 1] * shared_kernel[1][1];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 2] * shared_kernel[1][2];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 3] * shared_kernel[1][3];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 4] * shared_kernel[1][4];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 5] * shared_kernel[1][5];
+        acc += shared_input[threadIdx.y + 1][threadIdx.x + 6] * shared_kernel[1][6];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 0] * shared_kernel[2][0];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 1] * shared_kernel[2][1];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 2] * shared_kernel[2][2];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 3] * shared_kernel[2][3];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 4] * shared_kernel[2][4];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 5] * shared_kernel[2][5];
+        acc += shared_input[threadIdx.y + 2][threadIdx.x + 6] * shared_kernel[2][6];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 0] * shared_kernel[3][0];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 1] * shared_kernel[3][1];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 2] * shared_kernel[3][2];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 3] * shared_kernel[3][3];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 4] * shared_kernel[3][4];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 5] * shared_kernel[3][5];
+        acc += shared_input[threadIdx.y + 3][threadIdx.x + 6] * shared_kernel[3][6];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 0] * shared_kernel[4][0];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 1] * shared_kernel[4][1];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 2] * shared_kernel[4][2];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 3] * shared_kernel[4][3];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 4] * shared_kernel[4][4];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 5] * shared_kernel[4][5];
+        acc += shared_input[threadIdx.y + 4][threadIdx.x + 6] * shared_kernel[4][6];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 0] * shared_kernel[5][0];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 1] * shared_kernel[5][1];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 2] * shared_kernel[5][2];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 3] * shared_kernel[5][3];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 4] * shared_kernel[5][4];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 5] * shared_kernel[5][5];
+        acc += shared_input[threadIdx.y + 5][threadIdx.x + 6] * shared_kernel[5][6];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 0] * shared_kernel[6][0];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 1] * shared_kernel[6][1];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 2] * shared_kernel[6][2];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 3] * shared_kernel[6][3];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 4] * shared_kernel[6][4];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 5] * shared_kernel[6][5];
+        acc += shared_input[threadIdx.y + 6][threadIdx.x + 6] * shared_kernel[6][6];
+
+    }
+    __syncthreads(); // Sync before loading next channel's data
+
+
+
+
+
     // Write final accumulated result (float)
-    if(m < M && h < H_out && w < W_out){
-        y4d(b, m, h, w) = acc;
+    if(threadIdx.y< H_out && threadIdx.x < W_out){
+        y4d(b, m, threadIdx.y, threadIdx.x) = acc;
     }
 
     #undef y4d
@@ -498,26 +1187,6 @@ __global__ void forward_kernel_2(float *y, const float *x, const float *k, const
 // }
 
 torch::Tensor forward(const torch::Tensor &x, const torch::Tensor &w, int64_t M) {
-    /*Original Version*/
-    // const int B = x.size(0);
-    // const int C = x.size(1);
-    // const int H = x.size(2);
-    // const int W = x.size(3);
-    // const int K = w.size(3);
-    // const int H_out = H - K + 1;
-    // const int W_out = W - K + 1;
-    // auto y = torch::empty({B, M, H_out, W_out}, x.options());
-
-    // dim3 gridDim((B + 511) / 512);
-    // dim3 blockDim(512);
-    
-
-    // // C10_CUDA_CHECK(cudaDeviceSynchronize());
-    // forward_kernel<<<gridDim, blockDim>>>(y.data_ptr<float>(), x.data_ptr<float>(),
-    //                                       w.data_ptr<float>(), B, M, C, H, W, K);
-    // // C10_CUDA_CHECK(cudaDeviceSynchronize());
-
-    // return y;
 
     /*Current Version*/
     const int B = x.size(0);
@@ -532,12 +1201,25 @@ torch::Tensor forward(const torch::Tensor &x, const torch::Tensor &w, int64_t M)
     // printf("B:%d, C:%d, H:%d, W:%d, M:%d, K:%d\n",B,C,H,W,M,K);
 
      /*******************Tiling Version**********************/
+    // int W_grid = (W_out + TILE_WIDTH - 1) / TILE_WIDTH;        //number of horizontal tiles per output map
+    // int H_grid = (H_out + TILE_WIDTH - 1) / TILE_WIDTH;        //number of vertical tiles per output map
+    // int Y = W_grid * H_grid;            //number of tiles per output map
 
-    /*Self-defined Parameters*/
+    // dim3 gridDim(M,Y,B);
+    // dim3 blockDim(TILE_WIDTH,TILE_WIDTH,1);
+
+    // // C10_CUDA_CHECK(cudaDeviceSynchronize());
+    // forward_kernel<<<gridDim, blockDim>>>(y.data_ptr<float>(), x.data_ptr<float>(), w.data_ptr<float>(), B, M, C, H, W, K);
+    // // C10_CUDA_CHECK(cudaDeviceSynchronize());
+
+    /********************Shared Mem**************************/
+    
     if(C == 1){
-        int W_grid = (W_out + TILE_WIDTH_A - 1) / TILE_WIDTH_A;        //number of horizontal tiles per output map
-        int H_grid = (H_out + TILE_WIDTH_A - 1) / TILE_WIDTH_A;        //number of vertical tiles per output map
-        int Y = W_grid * H_grid;            //number of tiles per output map
+        const int W_grid = (W_out + TILE_WIDTH_A - 1) / TILE_WIDTH_A;        //number of horizontal tiles per output map
+        const int H_grid = (H_out + TILE_WIDTH_A - 1) / TILE_WIDTH_A;        //number of vertical tiles per output map
+        const int Y = W_grid * H_grid;            //number of tiles per output map
+
+        cudaMemcpyToSymbol(const_kernel, w.data_ptr<float>(), M * C * K * K * sizeof(float));
 
         dim3 gridDim(M,Y,B);
         dim3 blockDim(TILE_WIDTH_A,TILE_WIDTH_A,1);
@@ -546,9 +1228,9 @@ torch::Tensor forward(const torch::Tensor &x, const torch::Tensor &w, int64_t M)
         forward_kernel_1<<<gridDim, blockDim>>>(y.data_ptr<float>(), x.data_ptr<float>(), w.data_ptr<float>(), B, M, C, H, W, K);
         // C10_CUDA_CHECK(cudaDeviceSynchronize());
     }else{
-        int W_grid = (W_out + TILE_WIDTH_B - 1) / TILE_WIDTH_B;        //number of horizontal tiles per output map
-        int H_grid = (H_out + TILE_WIDTH_B - 1) / TILE_WIDTH_B;        //number of vertical tiles per output map
-        int Y = W_grid * H_grid;            //number of tiles per output map
+        const int W_grid = (W_out + TILE_WIDTH_B - 1) / TILE_WIDTH_B;        //number of horizontal tiles per output map
+        const int H_grid = (H_out + TILE_WIDTH_B - 1) / TILE_WIDTH_B;        //number of vertical tiles per output map
+        const int Y = W_grid * H_grid;            //number of tiles per output map
 
         dim3 gridDim(M,Y,B);
         dim3 blockDim(TILE_WIDTH_B,TILE_WIDTH_B,1);
